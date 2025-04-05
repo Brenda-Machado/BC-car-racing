@@ -2,12 +2,15 @@
 Brenda Silva Machado - 21101954
 2024/2
 
+Version with Beta Distribution
+
 """
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from torch.distributions import Beta
 import pickle
 
 class CNN(nn.Module):
@@ -21,8 +24,13 @@ class CNN(nn.Module):
         self.fc1 = nn.Linear(self._conv_output_size, 512)
         self.fc2 = nn.Linear(512, 512)
         
-        self.steering = nn.Linear(512, 1)  
-        self.brake_throttle = nn.Linear(512, 2) 
+        self.alpha_steering = nn.Linear(512, 1)
+        self.beta_steering = nn.Linear(512, 1)
+        self.alpha_brake = nn.Linear(512, 1)
+        self.beta_brake = nn.Linear(512, 1)
+        self.alpha_throttle = nn.Linear(512, 1)
+        self.beta_throttle = nn.Linear(512, 1)
+
         self.mse_loss = nn.MSELoss()
         self.loss = []
 
@@ -46,10 +54,14 @@ class CNN(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         
-        steering_output = self.steering(x) 
-        brake_throttle_output = self.brake_throttle(x) 
+        alpha_steering_output = F.softplus(self.alpha_steering(x))
+        beta_steering_output = F.softplus(self.beta_steering(x))
+        alpha_brake_output = F.softplus(self.alpha_brake(x))
+        beta_brake_output = F.softplus(self.beta_brake(x))
+        alpha_throttle_output = F.softplus(self.alpha_throttle(x))
+        beta_throttle_output = F.softplus(self.beta_throttle(x))
         
-        return steering_output, brake_throttle_output
+        return alpha_steering_output, beta_steering_output, alpha_brake_output, beta_brake_output, alpha_throttle_output, beta_throttle_output
 
     def compute_loss(self, steering_pred, throttle_brake_pred, steering_real, throttle_real, brake_real):
         steering_loss = self.mse_loss(steering_pred.squeeze(1), steering_real)
@@ -59,6 +71,11 @@ class CNN(nn.Module):
         total_loss = steering_loss + throttle_loss + brake_loss
         
         return total_loss
+
+    def compute_log_prob(self, alpha, beta, expert_action):
+        beta_dist = Beta(alpha, beta)
+        log_prob = beta_dist.log_prob(expert_action)
+        return log_prob
 
     def train_model(self, dataloader, epochs, learning_rate):
         optimizer = optim.Adam(self.parameters(), lr=learning_rate)
