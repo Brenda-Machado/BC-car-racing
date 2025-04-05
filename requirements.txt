@@ -1,0 +1,10 @@
+box2d
+gymnasium
+matplotlib
+numpy
+pandas
+pickle-mixin
+pygame
+opencv-python
+torch
+swig
