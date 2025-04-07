@@ -31,15 +31,7 @@ class CNN(nn.Module):
         self.alpha_throttle = nn.Linear(512, 1)
         self.beta_throttle = nn.Linear(512, 1)
 
-        self.mse_loss = nn.MSELoss()
-        self.loss = []
-
-        self._initialize_weights()
-        
-    def _initialize_weights(self):
-        for layer in [self.conv1, self.conv2, self.conv3, self.fc1, self.fc2, self.steering, self.brake_throttle]:
-            if isinstance(layer, nn.Linear) or isinstance(layer, nn.Conv2d):
-                nn.init.kaiming_normal_(layer.weight, mode='fan_out', nonlinearity='relu')
+        self.loss_for_statistics = []
         
     def conv_output(self, shape):
         input = torch.zeros(1, *shape)
@@ -61,16 +53,16 @@ class CNN(nn.Module):
         alpha_throttle_output = F.softplus(self.alpha_throttle(x))
         beta_throttle_output = F.softplus(self.beta_throttle(x))
         
-        return alpha_steering_output, beta_steering_output, alpha_brake_output, beta_brake_output, alpha_throttle_output, beta_throttle_output
+        return (alpha_steering_output, beta_steering_output), (alpha_brake_output, beta_brake_output), (alpha_throttle_output, beta_throttle_output)
 
-    def compute_loss(self, steering_pred, throttle_brake_pred, steering_real, throttle_real, brake_real):
-        steering_loss = self.mse_loss(steering_pred.squeeze(1), steering_real)
-        throttle_loss = self.mse_loss(throttle_brake_pred[:, 0], throttle_real)
-        brake_loss = self.mse_loss(throttle_brake_pred[:, 1], brake_real)
+    def compute_loss(self, steering_pred, throttle_pred, brake_pred, steering_real, throttle_real, brake_real):
+        steering_loss = self.compute_log_prob(steering_pred[0], steering_pred[1], steering_real)
+        throttle_loss = self.compute_log_prob(throttle_pred[0], throttle_pred[1], throttle_real)
+        brake_loss = self.compute_log_prob(brake_pred[0], brake_pred[1], brake_real)
 
         total_loss = steering_loss + throttle_loss + brake_loss
         
-        return total_loss
+        return -total_loss.mean()
 
     def compute_log_prob(self, alpha, beta, expert_action):
         beta_dist = Beta(alpha, beta)
@@ -94,13 +86,14 @@ class CNN(nn.Module):
                 
                 optimizer.zero_grad()
 
-                steering_pred, throttle_brake_pred = self(states)
-                loss = self.compute_loss(steering_pred, throttle_brake_pred, steering_real, throttle_real, brake_real)
+                steering_pred, throttle_pred, brake_pred = self(states)
+
+                loss = self.compute_loss(steering_pred, throttle_pred, brake_pred, steering_real, throttle_real, brake_real)
                 loss.backward()
                 optimizer.step()
                 
                 running_loss += loss.item()
-                # self.loss.append((i, loss.item()))
+                self.loss_for_statistics.append((i, loss.item()))
 
             print(f'[Mean loss: {running_loss/len(dataloader)}]')
 

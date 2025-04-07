@@ -17,6 +17,7 @@ from cnn import CNN
 from cnn_dataset import CNNDataset
 from torch.utils.data import DataLoader
 from car_racing_v0 import CarRacing
+from torch.distributions import Beta
 import torch
 import numpy as np
 import pickle
@@ -56,14 +57,14 @@ def run_model():
     print(f"Epochs: {epochs}, Alpha: {learning_rate}.")
 
     neural_network.train_model(dataloader, epochs, learning_rate)
-    neural_network.save_model('src/data/model/car_racing_model.pth')
+    neural_network.save_model('src/data/model/car_racing_model_beta.pth')
 
     print("Training process finished.")
 
 def load_model():
     env = CarRacing(render_mode="human")
     model = CNN(input_shape=(4, 84, 84))
-    model.load_state_dict(torch.load('src/data/model/car_racing_model_5_ep.pth')) 
+    model.load_state_dict(torch.load('src/data/model/car_racing_model_beta.pth')) 
     model.eval()
 
     reward = []
@@ -82,17 +83,32 @@ def load_model():
         steps = 0
 
         while True:
-            a = []
+
             state, frame_history = preprocess_state(s_prev, frame_history)
 
             with torch.no_grad(): 
-                steering, throttle_brake = model(state)
+                alpha_steering, beta_steering = model.alpha_steering(state), model.beta_steering(state)
+                alpha_throttle, beta_throttle = model.alpha_throttle(state), model.beta_throttle(state)
+                alpha_brake, beta_brake = model.alpha_brake(state), model.beta_brake(state)
 
-            a = [steering.item(), throttle_brake[0,0].item(), throttle_brake[0, 1].item()]
+            steering_dist = Beta(alpha_steering, beta_steering)
+            throttle_dist = Beta(alpha_throttle, beta_throttle)
+            brake_dist = Beta(alpha_brake, beta_brake)
+
+            steering_action = 2 * steering_dist.sample() - 1 
+            throttle_action = 2 * throttle_dist.sample() - 1  
+            brake_action = 2 * brake_dist.sample() - 1  
+
+            steering_action = 2*steering_action - 1
+            throttle_action = 2*throttle_action - 1
+            brake_action = 2*brake_action - 1
+
+            a = [steering_action.item(), throttle_action.item(), brake_action.item()]
             actions.append(a)
 
             s_prev, r, terminated, truncated, info = env.step(a)
             total_reward += r
+
             if total_reward > max_reward:
                 max_reward = total_reward
 
@@ -106,7 +122,7 @@ def load_model():
                 print(f"[End of episode {episodes}]")
                 break
 
-    with open('5.pkl','wb') as f:
+    with open('reward_beta.pkl','wb') as f:
         pickle.dump(reward, f)
         
     env.close()
@@ -194,6 +210,6 @@ def test_dataset():
             #         break
 
 if __name__ == "__main__":
-    # run_model()
+    run_model()
     load_model()
     # test_dataset()

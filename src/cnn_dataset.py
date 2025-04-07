@@ -27,7 +27,8 @@ class CNNDataset(Dataset):
         state = state_action[0]
         action = state_action[1]
         state = torch.tensor(state, dtype=torch.float32)
-        action = torch.tensor(action).float()
+        action_norm = (action + 1)/2 
+        action = torch.tensor(action_norm).float()
 
         return state, action
     
