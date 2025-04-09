@@ -53,12 +53,12 @@ class CNN(nn.Module):
         alpha_throttle_output = F.softplus(self.alpha_throttle(x))
         beta_throttle_output = F.softplus(self.beta_throttle(x))
         
-        return (alpha_steering_output, beta_steering_output), (alpha_brake_output, beta_brake_output), (alpha_throttle_output, beta_throttle_output)
+        return alpha_steering_output, beta_steering_output, alpha_brake_output, beta_brake_output, alpha_throttle_output, beta_throttle_output
 
-    def compute_loss(self, steering_pred, throttle_pred, brake_pred, steering_real, throttle_real, brake_real):
-        steering_loss = self.compute_log_prob(steering_pred[0], steering_pred[1], steering_real)
-        throttle_loss = self.compute_log_prob(throttle_pred[0], throttle_pred[1], throttle_real)
-        brake_loss = self.compute_log_prob(brake_pred[0], brake_pred[1], brake_real)
+    def compute_loss(self, steering_pred_alpha, steering_pred_beta, throttle_pred_alpha, throttle_pred_beta, brake_pred_alpha, brake_pred_beta, steering_real, throttle_real, brake_real):
+        steering_loss = self.compute_log_prob(steering_pred_alpha, steering_pred_beta, steering_real)
+        throttle_loss = self.compute_log_prob(throttle_pred_alpha, throttle_pred_beta, throttle_real)
+        brake_loss = self.compute_log_prob(brake_pred_alpha, brake_pred_beta, brake_real)
 
         total_loss = steering_loss + throttle_loss + brake_loss
         
@@ -83,12 +83,12 @@ class CNN(nn.Module):
                 steering_real = actions_real[:, 0]
                 throttle_real = actions_real[:, 1]
                 brake_real = actions_real[:, 2]
-                
+
                 optimizer.zero_grad()
 
-                steering_pred, throttle_pred, brake_pred = self(states)
+                steering_pred_alpha, steering_pred_beta, throttle_pred_alpha, throttle_pred_beta, brake_pred_alpha, brake_pred_beta = self(states)
 
-                loss = self.compute_loss(steering_pred, throttle_pred, brake_pred, steering_real, throttle_real, brake_real)
+                loss = self.compute_loss(steering_pred_alpha, steering_pred_beta, throttle_pred_alpha, throttle_pred_beta, brake_pred_alpha, brake_pred_beta, steering_real, throttle_real, brake_real)
                 loss.backward()
                 optimizer.step()
                 
