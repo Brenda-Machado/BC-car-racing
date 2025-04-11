@@ -46,12 +46,12 @@ class CNN(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         
-        alpha_steering_output = F.softplus(self.alpha_steering(x))
-        beta_steering_output = F.softplus(self.beta_steering(x))
-        alpha_brake_output = F.softplus(self.alpha_brake(x))
-        beta_brake_output = F.softplus(self.beta_brake(x))
-        alpha_throttle_output = F.softplus(self.alpha_throttle(x))
-        beta_throttle_output = F.softplus(self.beta_throttle(x))
+        alpha_steering_output = F.softplus(self.alpha_steering(x)) + 1e-3
+        beta_steering_output = F.softplus(self.beta_steering(x)) + 1e-3
+        alpha_brake_output = F.softplus(self.alpha_brake(x)) + 1e-3
+        beta_brake_output = F.softplus(self.beta_brake(x)) + 1e-3
+        alpha_throttle_output = F.softplus(self.alpha_throttle(x)) + 1e-3
+        beta_throttle_output = F.softplus(self.beta_throttle(x)) + 1e-3
         
         return alpha_steering_output, beta_steering_output, alpha_brake_output, beta_brake_output, alpha_throttle_output, beta_throttle_output
 
@@ -66,7 +66,9 @@ class CNN(nn.Module):
 
     def compute_log_prob(self, alpha, beta, expert_action):
         beta_dist = Beta(alpha, beta)
+        expert_action = expert_action.clamp(1e-6, 1 - 1e-6)
         log_prob = beta_dist.log_prob(expert_action)
+
         return log_prob
 
     def train_model(self, dataloader, epochs, learning_rate):
@@ -80,7 +82,7 @@ class CNN(nn.Module):
             for i, data in enumerate(dataloader, 0):
                 states, actions_real = data
                 
-                steering_real = actions_real[:, 0]
+                steering_real = (actions_real[:, 0]+ 1)/2
                 throttle_real = actions_real[:, 1]
                 brake_real = actions_real[:, 2]
 
@@ -101,7 +103,7 @@ class CNN(nn.Module):
     def save_model(self, path):
         torch.save(self.state_dict(), path)
         with open('loss_best.pkl','wb') as f:
-            pickle.dump(self.loss, f)
+            pickle.dump(self.loss_for_statistics, f)
 
 
 
