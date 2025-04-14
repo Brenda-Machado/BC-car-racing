@@ -35,11 +35,7 @@ make plot
 
 ### [Importante] 
 
-Nessa branch, está sendo implementada uma [Beta Distribution](https://web.stanford.edu/class/archive/cs/cs109/cs109.1212/lectureNotes/LN21_beta.pdf), dessa forma, as seguintes alterações foram feitas em relação à branch master:
-
-- Seis saídas da CNN: steering, brake e throttle, com beta e alpha para cada um;
-- Uso da função de ativação softplus;
-- Cálculo do logprob.
+...
 
 
 ### Links de referência:
