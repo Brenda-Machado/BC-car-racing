@@ -1,6 +1,8 @@
 # Clonagem comportamental
 
-Aprendizado por imitação é uma abordagem pela qual um modelo caixa-preta (rede neural) é treinado para imitar um especialista usando um conjunto fixo de amostras de pares observação-ação (ou trajetórias) obtidas daquele especialista. A clonagem comportamental (CC) é um tipo de aprendizagem por imitação baseada em um processo de treinamento supervisionado de um modelo (rede neural) usando um grande conjunto de dados rotulados. A CC tem sido utilizada para a obtenção de políticas de condução autônoma para veículos, onde as amostras de treinamento são geradas por motoristas humanos: a entrada da rede neural é a imagem da câmera do carro, enquanto a saída desejada corresponde ao atuador (ação do motorista: aceleração, direção, freio).
+Aprendizado por imitação é uma abordagem pela qual um modelo caixa-preta (rede neural) é treinado para imitar um especialista usando um conjunto fixo de amostras de pares observação-ação (ou trajetórias) obtidas daquele especialista.
+
+ A clonagem comportamental (CC) é um tipo de aprendizagem por imitação baseada em um processo de treinamento supervisionado de um modelo (rede neural) usando um grande conjunto de dados rotulados. A CC tem sido utilizada para a obtenção de políticas de condução autônoma para veículos, onde as amostras de treinamento são geradas por motoristas humanos: a entrada da rede neural é a imagem da câmera do carro, enquanto a saída desejada corresponde ao atuador (ação do motorista: aceleração, direção, freio).
 
 ...
 
@@ -15,9 +17,29 @@ Aprendizado por imitação é uma abordagem pela qual um modelo caixa-preta (red
 
 ![CNN](carRacing_CNN.png)
 
+## 3. Como rodar esse código:
+
+No diretório "src", basta rodar o seguinte comando:
+
+``
+make run
+``
+
+O Makefile irá criar o ambiente virtual e baixar as bibliotecas necessárias. Logo em seguida, irá executar o código em main.py, o qual contém funções para treinar a rede neural, avaliar e testar o data set.
+
+Para ver os plots da fitness, basta rodar o comando:
+
+``
+make plot
+``
+
 ### [Importante] 
 
-...
+Nessa branch, está sendo implementada uma [Beta Distribution](https://web.stanford.edu/class/archive/cs/cs109/cs109.1212/lectureNotes/LN21_beta.pdf), dessa forma, as seguintes alterações foram feitas em relação à branch master:
+
+- Seis saídas da CNN: steering, brake e throttle, com beta e alpha para cada um;
+- Uso da função de ativação softplus;
+- Cálculo do logprob.
 
 
 ### Links de referência:
