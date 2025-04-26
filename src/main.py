@@ -50,7 +50,7 @@ def run_model():
 
     print("Training Convolutional Neural Network.")
     
-    epochs = 1
+    epochs = 5
     learning_rate = 0.001
 
     print(f"Epochs: {epochs}, Alpha: {learning_rate}.")
@@ -87,12 +87,20 @@ def load_model():
 
             with torch.no_grad(): 
                 steering, throttle_brake = model(state)
+            
+            if throttle_brake < 0:
+                brake = throttle_brake.item()
+                throttle = 0
+            else:
+                brake = 0
+                throttle = throttle_brake.item()
 
-            a = [steering.item(), throttle_brake[0,0].item(), throttle_brake[0, 1].item()]
+            a = [steering.item(), throttle, brake]
             actions.append(a)
 
             s_prev, r, terminated, truncated, info = env.step(a)
             total_reward += r
+
             if total_reward > max_reward:
                 max_reward = total_reward
 

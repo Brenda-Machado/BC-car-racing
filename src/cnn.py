@@ -2,6 +2,8 @@
 Brenda Silva Machado - 21101954
 2024/2
 
+Last update: change from three to two neurons.
+
 """
 
 import torch
@@ -22,7 +24,7 @@ class CNN(nn.Module):
         self.fc2 = nn.Linear(512, 512)
         
         self.steering = nn.Linear(512, 1)  
-        self.brake_throttle = nn.Linear(512, 2) 
+        self.brake_throttle = nn.Linear(512, 1) 
         self.mse_loss = nn.MSELoss()
         self.loss = []
 
@@ -53,8 +55,8 @@ class CNN(nn.Module):
 
     def compute_loss(self, steering_pred, throttle_brake_pred, steering_real, throttle_real, brake_real):
         steering_loss = self.mse_loss(steering_pred.squeeze(1), steering_real)
-        throttle_loss = self.mse_loss(throttle_brake_pred[:, 0], throttle_real)
-        brake_loss = self.mse_loss(throttle_brake_pred[:, 1], brake_real)
+        brake_loss = self.mse_loss(throttle_brake_pred.squeeze(1), brake_real)
+        throttle_loss = self.mse_loss(throttle_brake_pred.squeeze(1), throttle_real)
 
         total_loss = steering_loss + throttle_loss + brake_loss
         
