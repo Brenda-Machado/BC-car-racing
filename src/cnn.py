@@ -55,11 +55,12 @@ class CNN(nn.Module):
 
     def compute_loss(self, steering_pred, throttle_brake_pred, steering_real, throttle_real, brake_real):
         steering_loss = self.mse_loss(steering_pred.squeeze(1), steering_real)
-        brake_loss = self.mse_loss(throttle_brake_pred.squeeze(1), brake_real)
-        throttle_loss = self.mse_loss(throttle_brake_pred.squeeze(1), throttle_real)
-
-        total_loss = steering_loss + throttle_loss + brake_loss
+        target_throttle_brake = throttle_real - brake_real
         
+        throttle_brake_loss = self.mse_loss(throttle_brake_pred.squeeze(1), target_throttle_brake)
+        
+        total_loss = steering_loss + throttle_brake_loss
+            
         return total_loss
 
     def train_model(self, dataloader, epochs, learning_rate):
