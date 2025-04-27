@@ -17,7 +17,7 @@ from cnn import CNN
 from cnn_dataset import CNNDataset
 from torch.utils.data import DataLoader
 from car_racing_v0 import CarRacing
-from torch.distributions import Beta
+from torch.distributions import Normal
 import torch
 import numpy as np
 import pickle
@@ -52,7 +52,7 @@ def run_model():
     print("Training Convolutional Neural Network.")
     
     epochs = 1
-    learning_rate = 0.001
+    learning_rate = 0.01
 
     print(f"Epochs: {epochs}, Alpha: {learning_rate}.")
 
@@ -83,25 +83,22 @@ def load_model():
         steps = 0
 
         while True:
-
             state, frame_history = preprocess_state(s_prev, frame_history)
 
             with torch.no_grad(): 
-                alpha_steering, beta_steering = model.alpha_steering(state), model.beta_steering(state)
-                alpha_throttle, beta_throttle = model.alpha_throttle(state), model.beta_throttle(state)
-                alpha_brake, beta_brake = model.alpha_brake(state), model.beta_brake(state)
+                steering_mu, steering_sigma, throttle_mu, throttle_sigma, brake_mu, brake_sigma = model(state)
 
-            steering_dist = Beta(alpha_steering, beta_steering)
-            throttle_dist = Beta(alpha_throttle, beta_throttle)
-            brake_dist = Beta(alpha_brake, beta_brake)
+            steering_dist = Normal(steering_mu, steering_sigma)
+            throttle_dist = Normal(throttle_mu, throttle_sigma)
+            brake_dist = Normal(brake_mu, brake_sigma)
 
-            steering_action = 2 * steering_dist.sample() - 1 
-            throttle_action = 2 * throttle_dist.sample() - 1  
-            brake_action = 2 * brake_dist.sample() - 1  
+            steering_action = steering_dist.sample()
+            throttle_action = throttle_dist.sample()
+            brake_action = brake_dist.sample()
 
-            steering_action = 2*steering_action - 1
-            throttle_action = 2*throttle_action - 1
-            brake_action = 2*brake_action - 1
+            steering_action = torch.clamp(steering_action, -1, 1)
+            throttle_action = torch.clamp(throttle_action, 0, 1)
+            brake_action = torch.clamp(brake_action, 0, 1)
 
             a = [steering_action.item(), throttle_action.item(), brake_action.item()]
             actions.append(a)

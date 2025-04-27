@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.distributions import Beta
+from torch.distributions import Normal
 import pickle
 
 class CNN(nn.Module):
@@ -23,13 +23,13 @@ class CNN(nn.Module):
         self._conv_output_size = self.conv_output(input_shape)
         self.fc1 = nn.Linear(self._conv_output_size, 512)
         self.fc2 = nn.Linear(512, 512)
-        
-        self.alpha_steering = nn.Linear(512, 1)
-        self.beta_steering = nn.Linear(512, 1)
-        self.alpha_brake = nn.Linear(512, 1)
-        self.beta_brake = nn.Linear(512, 1)
-        self.alpha_throttle = nn.Linear(512, 1)
-        self.beta_throttle = nn.Linear(512, 1)
+
+        self.steering_mu = nn.Linear(512, 1)
+        self.steering_sigma = nn.Linear(512, 1)
+        self.throttle_mu = nn.Linear(512, 1)
+        self.throttle_sigma = nn.Linear(512, 1)
+        self.brake_mu = nn.Linear(512, 1)
+        self.brake_sigma = nn.Linear(512, 1)
 
         self.loss_for_statistics = []
         
@@ -46,30 +46,31 @@ class CNN(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         
-        alpha_steering_output = F.softplus(self.alpha_steering(x)) + 1e-3
-        beta_steering_output = F.softplus(self.beta_steering(x)) + 1e-3
-        alpha_brake_output = F.softplus(self.alpha_brake(x)) + 1e-3
-        beta_brake_output = F.softplus(self.beta_brake(x)) + 1e-3
-        alpha_throttle_output = F.softplus(self.alpha_throttle(x)) + 1e-3
-        beta_throttle_output = F.softplus(self.beta_throttle(x)) + 1e-3
+        steering_mu = torch.tanh(self.steering_mu(x))
+        steering_sigma = F.softplus(self.steering_sigma(x)) + 1e-3
         
-        return alpha_steering_output, beta_steering_output, alpha_brake_output, beta_brake_output, alpha_throttle_output, beta_throttle_output
+        throttle_mu = torch.sigmoid(self.throttle_mu(x))
+        throttle_sigma = F.softplus(self.throttle_sigma(x)) + 1e-3
+        
+        brake_mu = torch.sigmoid(self.brake_mu(x))
+        brake_sigma = F.softplus(self.brake_sigma(x)) + 1e-3
+        
+        return steering_mu, steering_sigma, throttle_mu, throttle_sigma, brake_mu, brake_sigma
 
-    def compute_loss(self, steering_pred_alpha, steering_pred_beta, throttle_pred_alpha, throttle_pred_beta, brake_pred_alpha, brake_pred_beta, steering_real, throttle_real, brake_real):
-        steering_loss = self.compute_log_prob(steering_pred_alpha, steering_pred_beta, steering_real)
-        throttle_loss = self.compute_log_prob(throttle_pred_alpha, throttle_pred_beta, throttle_real)
-        brake_loss = self.compute_log_prob(brake_pred_alpha, brake_pred_beta, brake_real)
+    def compute_loss(self, steering_mu, steering_sigma, throttle_mu, throttle_sigma, 
+                    brake_mu, brake_sigma, steering_real, throttle_real, brake_real):
+        
+        steering_dist = Normal(steering_mu, steering_sigma)
+        throttle_dist = Normal(throttle_mu, throttle_sigma)
+        brake_dist = Normal(brake_mu, brake_sigma)
+
+        steering_loss = -steering_dist.log_prob(steering_real).mean()
+        throttle_loss = -throttle_dist.log_prob(throttle_real).mean()
+        brake_loss = -brake_dist.log_prob(brake_real).mean()
 
         total_loss = steering_loss + throttle_loss + brake_loss
         
-        return -total_loss.mean()
-
-    def compute_log_prob(self, alpha, beta, expert_action):
-        beta_dist = Beta(alpha, beta)
-        expert_action = expert_action.clamp(1e-6, 1 - 1e-6)
-        log_prob = beta_dist.log_prob(expert_action)
-
-        return log_prob
+        return total_loss
 
     def train_model(self, dataloader, epochs, learning_rate):
         optimizer = optim.Adam(self.parameters(), lr=learning_rate)
@@ -82,15 +83,20 @@ class CNN(nn.Module):
             for i, data in enumerate(dataloader, 0):
                 states, actions_real = data
                 
-                steering_real = (actions_real[:, 0]+ 1)/2
-                throttle_real = actions_real[:, 1]
-                brake_real = actions_real[:, 2]
+                steering_real = actions_real[:, 0] 
+                throttle_real = actions_real[:, 1]  
+                brake_real = actions_real[:, 2]     
 
                 optimizer.zero_grad()
 
-                steering_pred_alpha, steering_pred_beta, throttle_pred_alpha, throttle_pred_beta, brake_pred_alpha, brake_pred_beta = self(states)
+                steering_mu, steering_sigma, throttle_mu, throttle_sigma, brake_mu, brake_sigma = self(states)
 
-                loss = self.compute_loss(steering_pred_alpha, steering_pred_beta, throttle_pred_alpha, throttle_pred_beta, brake_pred_alpha, brake_pred_beta, steering_real, throttle_real, brake_real)
+                loss = self.compute_loss(
+                    steering_mu, steering_sigma,
+                    throttle_mu, throttle_sigma,
+                    brake_mu, brake_sigma,
+                    steering_real, throttle_real, brake_real
+                )
                 loss.backward()
                 optimizer.step()
                 
@@ -99,11 +105,7 @@ class CNN(nn.Module):
 
             print(f'[Mean loss: {running_loss/len(dataloader)}]')
 
-
     def save_model(self, path):
         torch.save(self.state_dict(), path)
         with open('loss_best.pkl','wb') as f:
             pickle.dump(self.loss_for_statistics, f)
-
-
-

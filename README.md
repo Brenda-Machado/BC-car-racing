@@ -19,8 +19,9 @@ Aprendizado por imitação é uma abordagem pela qual um modelo caixa-preta (red
 
 Nessa branch, está sendo implementada uma [Gaussian Distribution](https://www.cse.wustl.edu/~garnett/cse515t/fall_2019/files/lecture_notes/5.pdf), dessa forma, as seguintes alterações foram feitas em relação à branch master:
 
-- ...
-
+- Uso da distribuição Normal do PyTorch;
+- Cálculo do logprob;
+- Funções de ativação tanh e softplus.
 
 
 ### Links de referência:
