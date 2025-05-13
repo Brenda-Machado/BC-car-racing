@@ -4,7 +4,6 @@ Brenda Silva Machado - 21101954
 
 TO-DO:
 - Experimentos com 5 agentes em 20 trajetórias, salvar modelos para cada época;
-- Implementar distribuição beta.
 
 Importante:
 - 100 trajetórias é um bom parâmentro para avaliação de um agente.
@@ -50,24 +49,24 @@ def run_model():
 
     print("Training Convolutional Neural Network.")
     
-    epochs = 5
+    epochs = 1
     learning_rate = 0.001
 
     print(f"Epochs: {epochs}, Alpha: {learning_rate}.")
 
     neural_network.train_model(dataloader, epochs, learning_rate)
-    neural_network.save_model('src/data/model/car_racing_model.pth')
+    # neural_network.save_model('src/data/model/car_racing_model.pth')
 
     print("Training process finished.")
 
 def load_model():
     env = CarRacing(render_mode="human")
     model = CNN(input_shape=(4, 84, 84))
-    model.load_state_dict(torch.load('src/data/model/car_racing_model.pth')) 
+    model.load_state_dict(torch.load('src/data/model/car_racing_model_epoch_1.pth')) 
     model.eval()
 
     reward = []
-    max_episodes = 1
+    max_episodes = 20
     episodes = 0
     terminated = False
     truncated = False
@@ -104,17 +103,17 @@ def load_model():
             if total_reward > max_reward:
                 max_reward = total_reward
 
-            if steps % 200 == 0 or terminated or truncated:
-                print("\naction " + str([f"{x:+0.2f}" for x in a]))
+            if steps % 200 == 0:
+                # print("\naction " + str([f"{x:+0.2f}" for x in a]))
                 print(f"step {steps} total_reward {total_reward:+0.2f}")
             steps += 1
 
-            if terminated or truncated or steps == 2000:
-                reward.append(max_reward)
+            if terminated or truncated:
+                reward.append(total_reward)
                 print(f"[End of episode {episodes}]")
                 break
 
-    with open('5.pkl','wb') as f:
+    with open('epoch_1.pkl','wb') as f:
         pickle.dump(reward, f)
         
     env.close()
@@ -129,7 +128,7 @@ def load_model():
     plt.xlabel('Steps')
     plt.ylabel('Action')
     plt.legend()  
-    plt.show()
+    # plt.show()
 
 def test_dataset():
     # env = CarRacing(render_mode="human")

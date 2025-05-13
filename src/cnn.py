@@ -86,14 +86,14 @@ class CNN(nn.Module):
                 optimizer.step()
                 
                 running_loss += loss.item()
-                # self.loss.append((i, loss.item()))
-
+        
             print(f'[Mean loss: {running_loss/len(dataloader)}]')
-
+            self.loss.append((epoch, running_loss))
+            self.save_model(f'src/data/model/car_racing_model_epoch_{epoch + 1}.pth')
 
     def save_model(self, path):
         torch.save(self.state_dict(), path)
-        with open('loss_best.pkl','wb') as f:
+        with open('loss_10_epochs.pkl','wb') as f:
             pickle.dump(self.loss, f)
 
 
