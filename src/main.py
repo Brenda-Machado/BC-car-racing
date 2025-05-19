@@ -16,6 +16,8 @@ from cnn import CNN
 from cnn_dataset import CNNDataset
 from torch.utils.data import DataLoader
 from car_racing_v0 import CarRacing
+import gymnasium as gym
+from gymnasium.envs.box2d import CarRacing
 import torch
 import numpy as np
 import pickle
@@ -60,9 +62,16 @@ def run_model():
     print("Training process finished.")
 
 def load_model():
-    env = CarRacing(render_mode="human")
+    # env = CarRacing(render_mode="human")
+    gym.register(
+    id="CarRacing-v0",
+    entry_point="gymnasium.envs.box2d:CarRacing",
+    max_episode_steps=3000,
+    )
+
+    env = gym.make("CarRacing-v0", render_mode="human")
     model = CNN(input_shape=(4, 84, 84))
-    model.load_state_dict(torch.load('src/data/model/car_racing_model_epoch_1.pth')) 
+    model.load_state_dict(torch.load('src/data/model/car_racing_model_epoch_5.pth')) 
     model.eval()
 
     reward = []
@@ -94,7 +103,8 @@ def load_model():
                 brake = 0
                 throttle = throttle_brake.item()
 
-            a = [steering.item(), throttle, brake]
+            # a = [steering.item(), throttle, brake]
+            a = np.array([steering.item(), throttle, brake])
             actions.append(a)
 
             s_prev, r, terminated, truncated, info = env.step(a)
@@ -108,12 +118,12 @@ def load_model():
                 print(f"step {steps} total_reward {total_reward:+0.2f}")
             steps += 1
 
-            if terminated or truncated:
+            if terminated or truncated or steps > 3000:
                 reward.append(total_reward)
                 print(f"[End of episode {episodes}]")
                 break
 
-    with open('epoch_1.pkl','wb') as f:
+    with open('epoch_5.pkl','wb') as f:
         pickle.dump(reward, f)
         
     env.close()
@@ -201,6 +211,6 @@ def test_dataset():
             #         break
 
 if __name__ == "__main__":
-    run_model()
+    # run_model()
     load_model()
     # test_dataset()
