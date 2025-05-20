@@ -51,90 +51,92 @@ def run_model():
 
     print("Training Convolutional Neural Network.")
     
-    epochs = 1
-    learning_rate = 0.01
+    epochs = 5
+    learning_rate = 0.001
 
     print(f"Epochs: {epochs}, Alpha: {learning_rate}.")
 
     neural_network.train_model(dataloader, epochs, learning_rate)
-    neural_network.save_model('src/data/model/car_racing_model_beta.pth')
+    # neural_network.save_model('src/data/model/car_racing_model_beta.pth')
 
     print("Training process finished.")
 
 def load_model():
-    env = CarRacing(render_mode="human")
-    model = CNN(input_shape=(4, 84, 84))
-    model.load_state_dict(torch.load('src/data/model/car_racing_model_beta.pth')) 
-    model.eval()
 
-    reward = []
-    max_episodes = 1
-    episodes = 0
-    terminated = False
-    truncated = False
-    actions = []
-    frame_history = deque(maxlen=4)
-    max_reward = -1000
+    for epoch in range(2,5):
+        env = CarRacing(render_mode="human")
+        model = CNN(input_shape=(4, 84, 84))
+        model.load_state_dict(torch.load(f'src/data/model/car_racing_model_epoch_{epoch + 1}.pth')) 
+        model.eval()
 
-    while episodes < max_episodes:
-        episodes += 1
-        s_prev,_ = env.reset() 
-        total_reward = 0.0
-        steps = 0
+        reward = []
+        max_episodes = 10
+        episodes = 0
+        terminated = False
+        truncated = False
+        actions = []
+        frame_history = deque(maxlen=4)
+        max_reward = -1000
 
-        while True:
-            state, frame_history = preprocess_state(s_prev, frame_history)
+        while episodes < max_episodes:
+            episodes += 1
+            s_prev,_ = env.reset() 
+            total_reward = 0.0
+            steps = 0
 
-            with torch.no_grad(): 
-                steering_mu, steering_sigma, throttle_mu, throttle_sigma, brake_mu, brake_sigma = model(state)
+            while True:
+                state, frame_history = preprocess_state(s_prev, frame_history)
 
-            steering_dist = Normal(steering_mu, steering_sigma)
-            throttle_dist = Normal(throttle_mu, throttle_sigma)
-            brake_dist = Normal(brake_mu, brake_sigma)
+                with torch.no_grad(): 
+                    steering_mu, steering_sigma, throttle_mu, throttle_sigma, brake_mu, brake_sigma = model(state)
 
-            steering_action = steering_dist.sample()
-            throttle_action = throttle_dist.sample()
-            brake_action = brake_dist.sample()
+                steering_dist = Normal(steering_mu, steering_sigma)
+                throttle_dist = Normal(throttle_mu, throttle_sigma)
+                brake_dist = Normal(brake_mu, brake_sigma)
 
-            steering_action = torch.clamp(steering_action, -1, 1)
-            throttle_action = torch.clamp(throttle_action, 0, 1)
-            brake_action = torch.clamp(brake_action, 0, 1)
+                steering_action = steering_dist.sample()
+                throttle_action = throttle_dist.sample()
+                brake_action = brake_dist.sample()
 
-            a = [steering_action.item(), throttle_action.item(), brake_action.item()]
-            actions.append(a)
+                steering_action = torch.clamp(steering_action, -1, 1)
+                throttle_action = torch.clamp(throttle_action, 0, 1)
+                brake_action = torch.clamp(brake_action, 0, 1)
 
-            s_prev, r, terminated, truncated, info = env.step(a)
-            total_reward += r
+                a = [steering_action.item(), throttle_action.item(), brake_action.item()]
+                actions.append(a)
 
-            if total_reward > max_reward:
-                max_reward = total_reward
+                s_prev, r, terminated, truncated, info = env.step(a)
+                total_reward += r
 
-            if steps % 200 == 0 or terminated or truncated:
-                print("\naction " + str([f"{x:+0.2f}" for x in a]))
-                print(f"step {steps} total_reward {total_reward:+0.2f}")
-            steps += 1
+                if total_reward > max_reward:
+                    max_reward = total_reward
 
-            if terminated or truncated or steps == 2000:
-                reward.append(max_reward)
-                print(f"[End of episode {episodes}]")
-                break
+                if steps % 200 == 0 or terminated or truncated:
+                    print("\naction " + str([f"{x:+0.2f}" for x in a]))
+                    print(f"step {steps} total_reward {total_reward:+0.2f}")
+                steps += 1
 
-    with open('reward_beta.pkl','wb') as f:
-        pickle.dump(reward, f)
-        
-    env.close()
+                if terminated or truncated or steps == 3000:
+                    reward.append(max_reward)
+                    print(f"[End of episode {episodes}]")
+                    break
 
-    steering = [action[0] for action in actions]
-    brake = [action[1] for action in actions]
-    throttle = [action[2] for action in actions]
+        with open(f'epoch_{epoch + 1}.pkl','wb') as f:
+            pickle.dump(reward, f)
+            
+        env.close()
 
-    plt.plot(steering, label='Steering')
-    plt.plot(brake, label='Brake')
-    plt.plot(throttle, label='Throttle')
-    plt.xlabel('Steps')
-    plt.ylabel('Action')
-    plt.legend()  
-    plt.show()
+    # steering = [action[0] for action in actions]
+    # brake = [action[1] for action in actions]
+    # throttle = [action[2] for action in actions]
+
+    # plt.plot(steering, label='Steering')
+    # plt.plot(brake, label='Brake')
+    # plt.plot(throttle, label='Throttle')
+    # plt.xlabel('Steps')
+    # plt.ylabel('Action')
+    # plt.legend()  
+    # plt.show()
 
 def test_dataset():
     # env = CarRacing(render_mode="human")
@@ -207,6 +209,6 @@ def test_dataset():
             #         break
 
 if __name__ == "__main__":
-    run_model()
+    # run_model()
     load_model()
     # test_dataset()

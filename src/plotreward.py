@@ -19,9 +19,9 @@ def plot_reward(path):
             fitness_data = pickle.load(f)
             print(fitness_data)
         
-        plt.plot(fitness_data, label=f'Epoch {file.split(".")[0]}')
+        plt.plot(fitness_data, label=f'Model of {file.split(".")[0]}')
 
-    plt.xlabel('Epoch')
+    plt.xlabel('Episodes/Trajectories')
     plt.ylabel('Rewards')
     plt.legend()  
     plt.show()

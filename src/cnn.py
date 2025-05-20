@@ -104,8 +104,9 @@ class CNN(nn.Module):
                 self.loss_for_statistics.append((i, loss.item()))
 
             print(f'[Mean loss: {running_loss/len(dataloader)}]')
+            self.save_model(f'src/data/model/car_racing_model_epoch_{epoch + 1}.pth')
 
     def save_model(self, path):
         torch.save(self.state_dict(), path)
-        with open('loss_best.pkl','wb') as f:
-            pickle.dump(self.loss_for_statistics, f)
+        # with open('loss_best.pkl','wb') as f:
+        #     pickle.dump(self.loss_for_statistics, f)
