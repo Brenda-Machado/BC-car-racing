@@ -2,14 +2,7 @@
 Brenda Silva Machado - 21101954
 2024/2
 
-TO-DO:
-- Experimentos com 5 agentes em 20 trajetórias, salvar modelos para cada época;
-- Implementar distribuição beta.
-
-Importante:
-- 100 trajetórias é um bom parâmentro para avaliação de um agente.
-
-episódios = trajetorias diferentes
+main.py
 
 """
 
@@ -25,6 +18,10 @@ import cv2
 from collections import deque
 import matplotlib.pyplot as plt
 
+"""
+Auxiliary functions
+"""
+
 def gray_scale(state):
     gray_image = np.dot(state[..., :3], [0.2989, 0.5870, 0.1140]).astype(np.float32)
     gray_image_resized = cv2.resize(gray_image, (84, 84))
@@ -35,6 +32,7 @@ def gray_scale(state):
 def preprocess_state(state, frame_history):
     gray_frame = gray_scale(state)
     frame_history.append(gray_frame)
+
     while len(frame_history) < 4:
         frame_history.append(gray_frame)
     stacked_frames = np.stack(list(frame_history), axis=0)
@@ -42,91 +40,7 @@ def preprocess_state(state, frame_history):
     state = torch.tensor(stacked_frames, dtype=torch.float32).unsqueeze(0)
     return state, frame_history
 
-def run_model():
-    path = 'src/data/trajectories'
-    dataset = CNNDataset(path)
-    dataloader = DataLoader(dataset, batch_size=128, shuffle=True) 
-    
-    neural_network = CNN(input_shape=(4, 84, 84))
-
-    print("Training Convolutional Neural Network.")
-    
-    epochs = 1
-    learning_rate = 0.001
-
-    print(f"Epochs: {epochs}, Alpha: {learning_rate}.")
-
-    neural_network.train_model(dataloader, epochs, learning_rate)
-    neural_network.save_model('src/data/model/car_racing_model_beta.pth')
-
-    print("Training process finished.")
-
-def load_model():
-    env = CarRacing(render_mode="human")
-    model = CNN(input_shape=(4, 84, 84))
-    model.load_state_dict(torch.load('src/data/model/car_racing_model_beta.pth')) 
-    model.eval()
-
-    reward = []
-    max_episodes = 1
-    episodes = 0
-    terminated = False
-    truncated = False
-    actions = []
-    frame_history = deque(maxlen=4)
-    max_reward = -1000
-
-    while episodes < max_episodes:
-        episodes += 1
-        s_prev,_ = env.reset() 
-        total_reward = 0.0
-        steps = 0
-
-        while True:
-
-            state, frame_history = preprocess_state(s_prev, frame_history)
-
-            with torch.no_grad(): 
-                alpha_steering, beta_steering = model.alpha_steering(state), model.beta_steering(state)
-                alpha_throttle, beta_throttle = model.alpha_throttle(state), model.beta_throttle(state)
-                alpha_brake, beta_brake = model.alpha_brake(state), model.beta_brake(state)
-
-            steering_dist = Beta(alpha_steering, beta_steering)
-            throttle_dist = Beta(alpha_throttle, beta_throttle)
-            brake_dist = Beta(alpha_brake, beta_brake)
-
-            steering_action = 2 * steering_dist.sample() - 1 
-            throttle_action = 2 * throttle_dist.sample() - 1  
-            brake_action = 2 * brake_dist.sample() - 1  
-
-            steering_action = 2*steering_action - 1
-            throttle_action = 2*throttle_action - 1
-            brake_action = 2*brake_action - 1
-
-            a = [steering_action.item(), throttle_action.item(), brake_action.item()]
-            actions.append(a)
-
-            s_prev, r, terminated, truncated, info = env.step(a)
-            total_reward += r
-
-            if total_reward > max_reward:
-                max_reward = total_reward
-
-            if steps % 200 == 0 or terminated or truncated:
-                print("\naction " + str([f"{x:+0.2f}" for x in a]))
-                print(f"step {steps} total_reward {total_reward:+0.2f}")
-            steps += 1
-
-            if terminated or truncated or steps == 2000:
-                reward.append(max_reward)
-                print(f"[End of episode {episodes}]")
-                break
-
-    with open('reward_beta.pkl','wb') as f:
-        pickle.dump(reward, f)
-        
-    env.close()
-
+def plot_actions(actions):
     steering = [action[0] for action in actions]
     brake = [action[1] for action in actions]
     throttle = [action[2] for action in actions]
@@ -139,77 +53,90 @@ def load_model():
     plt.legend()  
     plt.show()
 
-def test_dataset():
-    # env = CarRacing(render_mode="human")
-    dataset = CNNDataset('src/data/trajectories')
-    model = CNN(input_shape=(4, 84, 84))
-    model.load_state_dict(torch.load('src/data/model/car_racing_model_1_ep.pth'))
-    model.eval()
+"""
+Train and Evaluation of the model
+"""
 
-    # a = [example[1] for example in dataset.data]
-    # plt.plot(a)
-    # plt.show()
+def train_model():
+    path = 'src/data/trajectories'
+    dataset = CNNDataset(path)
+    dataloader = DataLoader(dataset, batch_size=128, shuffle=True) 
+    
+    neural_network = CNN(input_shape=(4, 84, 84))
 
-    dataloader = DataLoader(dataset)
-    steering = []
-    throttle = []
-    brake = []
+    print("Training Convolutional Neural Network.")
+    
+    epochs = 5
+    learning_rate = 0.001
 
-    for data in dataloader:
-        state, action = data
-        steering.append(action[0,0].item())
-        throttle.append(action[0,1].item())
-        brake.append(action[0,2].item())
-    for i in range(len(steering)):
-        a = [steering[i], throttle[i], brake[i]]
+    print(f"Epochs: {epochs}, Alpha: {learning_rate}.")
 
-    # plt.figure(figsize=(10, 6))
-    # plt.plot(action)
-    # plt.show()
+    neural_network.train_model(dataloader, epochs, learning_rate)
 
+    print("Training process finished.")
 
-    max_episodes = 10
-    episodes = 0
-    terminated = False
-    truncated = False
-    total_reward = 0.0
-    steering = []
-    throttle = []
-    brake = []
+def evaluate_model():
+    for epoch in range(5):
+        env = CarRacing(render_mode="human")
+        model = CNN(input_shape=(4, 84, 84))
+        model.load_state_dict(torch.load(f'src/data/model/car_racing_model_epoch_{epoch + 1}.pth')) 
+        model.eval()
 
-    while episodes <= max_episodes:
-        # s_prev,_ = env.reset()
-        steps = 0
+        reward = []
+        max_episodes = 10
+        episodes = 0
+        terminated = False
+        truncated = False
+        actions = []
+        frame_history = deque(maxlen=4)
+        max_reward = -1000
 
-        while True:
-            for data in dataloader:
-                state, action = data
-                steering.append(action[0,0].item())
-                throttle.append(action[0,1].item())
-                brake.append(action[0,2].item())
+        while episodes < max_episodes:
+            episodes += 1
+            s_prev,_ = env.reset() 
+            total_reward = 0.0
+            steps = 0
+
+            while True:
+
+                state, frame_history = preprocess_state(s_prev, frame_history)
+
                 with torch.no_grad(): 
-                    steering2, throttle_brake2 = model(state)
-                print("net output", steering2, throttle_brake2)
-                print("dataset", action)
-                print(state.shape)
-                plt.imshow(state[0, 0], cmap='gray')
-                plt.axis('off') 
-                plt.show()
-            # for i in range(len(steering)):
-            #     a = [steering[i], throttle[i], brake[i]]
-            #     s, r, terminated, truncated, info = env.step(a)
-            #     total_reward += r
-            #     steps += 1
+                    alpha_steering, beta_steering,alpha_throttle, beta_throttle, alpha_brake, beta_brake = model(state)
 
-            #     if steps % 200 == 0 or terminated or truncated:
-            #         print("\naction " + str([f"{x:+0.2f}" for x in a]))
-            #         print(f"step {steps} total_reward {total_reward:+0.2f}")
+                steering_dist = Beta(alpha_steering, beta_steering)
+                throttle_dist = Beta(alpha_throttle, beta_throttle)
+                brake_dist = Beta(alpha_brake, beta_brake)
 
-            #     if terminated or truncated:
-            #         print(f"End of episode {episodes}")
-            #         break
+                steering_action = 2 * steering_dist.sample() - 1 
+                throttle_action = 2 * throttle_dist.sample() - 1  
+                brake_action = 2 * brake_dist.sample() - 1  
+
+                a = [steering_action.item(), throttle_action.item(), brake_action.item()]
+                actions.append(a)
+
+                s_prev, r, terminated, truncated, info = env.step(a)
+                total_reward += r
+
+                if total_reward > max_reward:
+                    max_reward = total_reward
+
+                if steps % 200 == 0 or terminated or truncated:
+                    print("\naction " + str([f"{x:+0.2f}" for x in a]))
+                    print(f"step {steps} total_reward {total_reward:+0.2f}")
+                steps += 1
+
+                if terminated or truncated or steps == 3000:
+                    reward.append(max_reward)
+                    print(f"[End of episode {episodes}]")
+                    break
+
+        with open(f'epoch_{epoch + 1}.pkl','wb') as f:
+            pickle.dump(reward, f)
+            
+        env.close()
+
 
 if __name__ == "__main__":
-    run_model()
-    load_model()
-    # test_dataset()
+    train_model()
+    evaluate_model()
