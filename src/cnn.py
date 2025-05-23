@@ -1,7 +1,7 @@
 """
 Brenda Silva Machado - 21101954
-2024/2
 
+BC - Car Racing - CNN
 """
 
 import torch

@@ -14,6 +14,7 @@ episódios = trajetorias diferentes
 """
 
 from cnn import CNN 
+from ibc_cnn import EnergyCNN
 from cnn_dataset import CNNDataset
 from torch.utils.data import DataLoader
 from car_racing_v0 import CarRacing
@@ -23,6 +24,19 @@ import pickle
 import cv2
 from collections import deque
 import matplotlib.pyplot as plt
+
+def plot_actions(actions):
+    steering = [action[0] for action in actions]
+    brake = [action[1] for action in actions]
+    throttle = [action[2] for action in actions]
+
+    plt.plot(steering, label='Steering')
+    plt.plot(brake, label='Brake')
+    plt.plot(throttle, label='Throttle')
+    plt.xlabel('Steps')
+    plt.ylabel('Action')
+    plt.legend()  
+    plt.show()
 
 def gray_scale(state):
     gray_image = np.dot(state[..., :3], [0.2989, 0.5870, 0.1140]).astype(np.float32)
@@ -41,7 +55,7 @@ def preprocess_state(state, frame_history):
     state = torch.tensor(stacked_frames, dtype=torch.float32).unsqueeze(0)
     return state, frame_history
 
-def run_model():
+def train_bc_model():
     path = 'src/data/trajectories'
     dataset = CNNDataset(path)
     dataloader = DataLoader(dataset, batch_size=128, shuffle=True) 
@@ -60,7 +74,26 @@ def run_model():
 
     print("Training process finished.")
 
-def load_model():
+def train_ibc_model():
+    path = 'src/data/trajectories'
+    dataset = CNNDataset(path)
+    dataloader = DataLoader(dataset, batch_size=128, shuffle=True) 
+    
+    neural_network = EnergyCNN(input_shape=(4, 84, 84))
+
+    print("IBC: Training Convolutional Neural Network.")
+    
+    epochs = 10
+    learning_rate = 0.001
+
+    print(f"Epochs: {epochs}, Alpha: {learning_rate}.")
+
+    neural_network.train_model(dataloader, epochs, learning_rate)
+    neural_network.save_model('src/data/model/ibc_car_racing_model.pth')
+
+    print("IBC: Training process finished.")
+
+def eval_bc_model():
     env = CarRacing(render_mode="human")
     model = CNN(input_shape=(4, 84, 84))
     model.load_state_dict(torch.load('src/data/model/car_racing_model.pth')) 
@@ -111,89 +144,66 @@ def load_model():
         
     env.close()
 
-    steering = [action[0] for action in actions]
-    brake = [action[1] for action in actions]
-    throttle = [action[2] for action in actions]
-
-    plt.plot(steering, label='Steering')
-    plt.plot(brake, label='Brake')
-    plt.plot(throttle, label='Throttle')
-    plt.xlabel('Steps')
-    plt.ylabel('Action')
-    plt.legend()  
-    plt.show()
-
-def test_dataset():
-    # env = CarRacing(render_mode="human")
-    dataset = CNNDataset('src/data/trajectories')
-    model = CNN(input_shape=(4, 84, 84))
-    model.load_state_dict(torch.load('src/data/model/car_racing_model_1_ep.pth'))
+def eval_ibc_model():
+    env = CarRacing(render_mode="human")
+    model = EnergyCNN(input_shape=(4, 84, 84))
+    model.load_state_dict(torch.load('src/data/model/ibc_car_racing_model.pth')) 
     model.eval()
 
-    # a = [example[1] for example in dataset.data]
-    # plt.plot(a)
-    # plt.show()
+    reward = []
+    max_episodes = 1
+    actions = []
+    frame_history = deque(maxlen=4)
+    max_reward = -1000
 
-    dataloader = DataLoader(dataset)
-    steering = []
-    throttle = []
-    brake = []
-
-    for data in dataloader:
-        state, action = data
-        steering.append(action[0,0].item())
-        throttle.append(action[0,1].item())
-        brake.append(action[0,2].item())
-    for i in range(len(steering)):
-        a = [steering[i], throttle[i], brake[i]]
-
-    # plt.figure(figsize=(10, 6))
-    # plt.plot(action)
-    # plt.show()
-
-
-    max_episodes = 10
-    episodes = 0
-    terminated = False
-    truncated = False
-    total_reward = 0.0
-    steering = []
-    throttle = []
-    brake = []
-
-    while episodes <= max_episodes:
-        # s_prev,_ = env.reset()
+    for episode in range(max_episodes):
+        s_prev, _ = env.reset()
+        total_reward = 0.0
         steps = 0
+        terminated = False
+        truncated = False
 
         while True:
-            for data in dataloader:
-                state, action = data
-                steering.append(action[0,0].item())
-                throttle.append(action[0,1].item())
-                brake.append(action[0,2].item())
-                with torch.no_grad(): 
-                    steering2, throttle_brake2 = model(state)
-                print("net output", steering2, throttle_brake2)
-                print("dataset", action)
-                print(state.shape)
-                plt.imshow(state[0, 0], cmap='gray')
-                plt.axis('off') 
-                plt.show()
-            # for i in range(len(steering)):
-            #     a = [steering[i], throttle[i], brake[i]]
-            #     s, r, terminated, truncated, info = env.step(a)
-            #     total_reward += r
-            #     steps += 1
+            
+            state, frame_history = preprocess_state(s_prev, frame_history)
+            state = state.to(model.device)
 
-            #     if steps % 200 == 0 or terminated or truncated:
-            #         print("\naction " + str([f"{x:+0.2f}" for x in a]))
-            #         print(f"step {steps} total_reward {total_reward:+0.2f}")
+            num_candidates = 64
+            action_candidates = torch.empty(num_candidates, 3).uniform_(-1.0, 1.0).to(model.device)
 
-            #     if terminated or truncated:
-            #         print(f"End of episode {episodes}")
-            #         break
+            # Repetir estado N vezes
+            state_batch = state.repeat(num_candidates, 1, 1, 1)
+
+            with torch.no_grad():
+                energies = model(state_batch, action_candidates)
+                best_idx = torch.argmin(energies)
+                best_action = action_candidates[best_idx]
+
+            # Converter ação para lista
+            a = best_action.detach().cpu().numpy().tolist()
+            actions.append(a)
+
+            # Passar ação para o ambiente
+            s_prev, r, terminated, truncated, info = env.step(a)
+            total_reward += r
+            if total_reward > max_reward:
+                max_reward = total_reward
+
+            if steps % 200 == 0 or terminated or truncated:
+                print("\naction " + str([f"{x:+0.2f}" for x in a]))
+                print(f"step {steps} total_reward {total_reward:+0.2f}")
+            steps += 1
+
+            if terminated or truncated:
+                reward.append(total_reward)
+                print(f"[End of episode {episode + 1}]")
+                break
+
+    with open('rewards_per_episode.pkl','wb') as f:
+        pickle.dump(reward, f)
+        
+    env.close()
 
 if __name__ == "__main__":
-    run_model()
-    load_model()
-    # test_dataset()
+    train_ibc_model()
+    # eval_ibc_model()
