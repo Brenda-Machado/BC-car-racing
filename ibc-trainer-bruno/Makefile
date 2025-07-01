@@ -3,7 +3,7 @@ venv/bin/activate: requirements.txt
 	 ./venv/bin/pip install -r requirements.txt	
 
 run: venv/bin/activate
-	 ./venv/bin/python3 train.py
+	 ./venv/bin/python3 trainer_with_validation.py
 
 test: venv/bin/activate
 	 ./venv/bin/python3 test.py

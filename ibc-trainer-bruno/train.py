@@ -18,8 +18,11 @@ class Trainer():
         self.device = device
         self.batch_size = batch_size
         self.model = model.to(device)
-        self.n_epoch = 1
+        self.n_epoch = 1000
         self.dataset = dataset
+        self.patience = 20       
+        self.best_val_loss = float('inf')
+        self.epochs_no_improve = 0
 
     def wandb_init(self):
         wandb.init(
@@ -48,16 +51,17 @@ class Trainer():
 
     def run(self):
         self.wandb_init()
-        train_loader = self._dataloader()
-        self._training_loop(train_loader)
+        train_loader = self._dataloader('train')
+        valid_loader = self._dataloader('valid')  
+        self._training_loop(train_loader, valid_loader)
         wandb.finish()
         self._save_model(ep=self.n_epoch)
 
     def _save_model(self, ep):
         os.makedirs(os.getcwd()+'/model_pytorch/'+self.dataset.split(os.sep)[1], exist_ok=True)
-        torch.save(self.model.state_dict(), os.getcwd()+'/model_pytorch/'+self.dataset.split(os.sep)[1]+'/'+self.dataset.split(os.sep)[2]+'_'+"bc_irving"+'_ep_'+f'{ep}'+'.pkl')
+        torch.save(self.model.state_dict(), os.getcwd()+'/model_pytorch/'+self.dataset.split(os.sep)[1]+'/'+self.dataset.split(os.sep)[2]+'_'+"bc_resnet"+'_ep_'+f'{ep}'+'.pkl')
 
-    def _training_loop(self, train_loader):
+    def _training_loop(self, train_loader, valid_loader):
         for ep in tqdm(range(self.n_epoch), desc="Epoch"):
             results_ep = [ep]
             loss = 0
@@ -73,7 +77,7 @@ class Trainer():
                 self.optimizer.step()
                 iter += 1
                 loss_bin += loss.item()
-                pbar.set_description(f"train loss: {loss.item()}")
+                pbar.set_description(f"Train loss: {loss.item()}")
 
                 # log metrics to wandb
                 wandb.log({"loss": loss.item(),
@@ -81,9 +85,32 @@ class Trainer():
                             "acceleration_action_MSE": action_MSE[1],
                             "right_action_MSE": action_MSE[2]})
                 
-                print(f'Epoch average loss: {loss_bin/iter}')
-            if ep in [1, 10, 30, 50, 70, 90, 110, 130, 160, 190, 220, 249]:
-                self._save_model(ep)
+            avg_train_loss = loss_bin/iter
+
+            self.model.eval()
+            val_loss_sum = 0
+            n=0
+            with torch.no_grad():
+                for X_val, y_val in valid_loader:
+                    y_hat = self.model(X_val.to(self.device))
+                    loss = self.loss_func(y_hat, y_val.to(self.device))
+                    val_loss_sum += loss.item()
+                    n+=1
+            avg_val_loss = val_loss_sum / n
+            wandb.log({"val_loss": avg_val_loss})
+            print(f'Epoch {ep+1}, Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}')
+
+            # early stopping por loss de validação
+            if avg_val_loss < self.best_val_loss:
+                self.best_val_loss = avg_val_loss
+                self.epochs_no_improve = 0
+                self._save_model(ep)  # salva melhor modelo
+            else:
+                self.epochs_no_improve += 1
+                print(f"No improvement for {self.epochs_no_improve}/{self.patience} epochs")
+                if self.epochs_no_improve >= self.patience:
+                    print(f"Early stopping at epoch {ep+1}")
+                    break
 
     def _validation(self, test_loader):
         loss = 0
@@ -126,14 +153,14 @@ if __name__ == '__main__':
 
         dataset_origin = dataset.split(os.sep)[1]
         obs = processor.preprocess_images(obs, dataset_origin)
-        model = EnergyCNN()
+        # model = Model_residual()
 
-        #model = Model_residual(x_shape=obs.shape[1:],
-                               #n_hidden=128,
-                               #y_dim=actions.shape[1],
-                               #embed_dim=128,
-                               #net_type='transformer',
-                               #output_dim=1152)
+        model = Model_residual(x_shape=obs.shape[1:],
+                               n_hidden=128,
+                               y_dim=actions.shape[1],
+                               embed_dim=128,
+                               net_type='transformer',
+                               output_dim=1152)
        
         lr = 1e-4
         Trainer(obs,

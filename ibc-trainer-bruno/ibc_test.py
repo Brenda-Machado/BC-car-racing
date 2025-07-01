@@ -20,9 +20,6 @@ class Tester():
         self.actions = []
 
     def select_action(self, obs_tensor, num_samples=128):
-        """
-        Seleciona a melhor ação com base na energia (menor energia = melhor).
-        """
         obs_tensor = obs_tensor.to(self.device)
         obs_tensor = obs_tensor.repeat(num_samples, 1, 1, 1)  # [N, H, W, C]
 
@@ -39,11 +36,13 @@ class Tester():
     def run(self, save, time_in_s=1e100, name=''):
         episode = 0
         reward_list = []  
-        while episode < 10:
+
+        while episode < 100:
             reward = 0
             obs_orig = self.env.reset()
             tempo_inicial = time.time()
             counter = 0
+
             while counter < 1000:
                 self.model.eval()
                 obs = DataHandler().to_greyscale(obs_orig)
@@ -51,7 +50,6 @@ class Tester():
                 obs = DataHandler().stack_with_previous(np.expand_dims(obs, axis=0))
                 obs_tensor = torch.from_numpy(obs).float().to(self.device)
 
-                # >>> Nova forma de obter ação <<<
                 action = self.select_action(obs_tensor)
 
                 if save:
@@ -97,32 +95,18 @@ class Tester():
         plt.close()
 
 if __name__ == '__main__':
-    # with open('reward_ibc_resnet.pkl', 'rb') as f:
-    #         fitness_data = pickle.load(f)
-
     processor = DataHandler()
     datasets = [r'Datasets/human/tutorial_human_expert_1/']
+
     for dataset in datasets:
         obs = processor.load_data(dataset+'/states.npy').astype('float32')
         actions = processor.load_data(dataset+'/actions.npy').astype('float32')
-
         dataset_origin = dataset.split(os.sep)[1]
         obs = processor.preprocess_images(obs, dataset_origin)
-    # model = Model_residual(x_shape=obs.shape[1:],
-    #                            n_hidden=128,
-    #                            y_dim=actions.shape[1],
-    #                            embed_dim=128,
-    #                            net_type='transformer',
-    #                            output_dim=1152)
-    model = ResNetEnergyCNN()
+
+    model = EnergyCNN()
     model_path = './model_pytorch/human/'
-    episodes = [90, 70, 50, 30, 10, 1]
-    for ep in episodes:
-        # version = model_path + 'model_stacked_900_plus_ep_'+f'{ep}'+'.pkl'
-        version = model_path + 'ibc_resnet_ep_1.pkl'
-        model.load_state_dict(torch.load(version))
-        env = CarRacing()
-        # Tester(model=model,env=env).scatter_plot_reward(fitness_data, "ibc resnet") 
-        Tester(model=model,env=env).run(save=False,
-                                        time_in_s=1*60*60,
-                                        name='ibc ebm resnet')
+    version = model_path + 'ibc_resnet_ep_1.pkl'
+    model.load_state_dict(torch.load(version))
+    env = CarRacing() 
+    Tester(model=model,env=env).run(save=False,time_in_s=1*60*60, name='ibc ebm resnet')

@@ -24,7 +24,7 @@ class Tester():
 
         episode = 0
         reward_list = []  
-        while episode < 10:
+        while episode < 100:
             reward = 0
             obs_orig = self.env.reset()
             tempo_inicial = time.time()
@@ -86,7 +86,7 @@ class Tester():
         plt.grid()
         path = "experiments/"
         os.makedirs(path, exist_ok=True)
-        plt.savefig(path+"bc_epoch_"+str(name)+".png")
+        plt.savefig(path+"bc_cnn_epoch_"+str(name)+".png")
         plt.close()
 
 if __name__ == '__main__':
@@ -111,10 +111,10 @@ if __name__ == '__main__':
     episodes = [90, 70, 50, 30, 10, 1]
     for ep in episodes:
         # version = model_path + 'model_stacked_900_plus_ep_'+f'{ep}'+'.pkl'
-        version = model_path + 'ibc_irving_ep_1.pkl'
+        version = model_path + 'bc_cnn_ep_17.pkl'
         model.load_state_dict(torch.load(version))
         env = CarRacing()
         # Tester(model=model,env=env).scatter_plot_reward(fitness_data, "bc irving") 
         Tester(model=model,env=env).run(save=False,
                                         time_in_s=1*60*60,
-                                        name='ibc ebm irving')
+                                        name='bc cnn')

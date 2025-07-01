@@ -103,6 +103,28 @@ class EnergyCNN(nn.Module):
         energy = self.energy_head(x)
         return energy.squeeze(-1)
 
+    def ibc_loss(self, states, pos_act, num_neg=16, temperature=1.0):
+        batch_size = states.size(0)
+
+        # Energia da ação positiva (expert)
+        e_pos = self(states, pos_act)
+
+        # Ações negativas (ruído em torno da ação expert)
+        neg_act = pos_act.repeat_interleave(num_neg, dim=0)
+        noise = 0.05 * torch.randn_like(neg_act).to(self.device)
+        neg_act = torch.clamp(neg_act + noise, -1, 1)
+        neg_states = states.repeat_interleave(num_neg, dim=0)
+
+        # Energia das ações negativas
+        e_neg = self(neg_states, neg_act).view(batch_size, num_neg)
+
+        # InfoNCE loss: menor energia é melhor (energias negativas)
+        logits = torch.cat([-e_pos.unsqueeze(1), -e_neg], dim=1) / temperature
+        labels = torch.zeros(batch_size, dtype=torch.long, device=self.device)
+        loss = F.cross_entropy(logits, labels)
+
+        return loss
+
 class ResNetEnergyCNN(nn.Module):
     def __init__(self, input_ch=4, action_dim=3):
         super().__init__()
