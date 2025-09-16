@@ -130,6 +130,7 @@ Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICE
 ## Autores
 
 - **Brenda Machado** - *Bolsista PIBIC* - [Brenda-Machado](https://github.com/Brenda-Machado)
+- **Eric Aislan Antonelo** - *Orientador*
 - **Bruno**
 
 ## Agradecimentos
